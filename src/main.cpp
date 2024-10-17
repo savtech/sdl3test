@@ -17,6 +17,7 @@ static constexpr Resolution resolutions[] = {
     { 640, 360 },
     { 1024, 576 },
     { 1366, 768 },
+    { 1440, 900 },
     { 1920, 1080 }
 };
 
@@ -51,25 +52,29 @@ static SDL_GPUDevice* device = nullptr;
 struct GPUBuffer {
     SDL_GPUBuffer* buffer;
     SDL_GPUBufferUsageFlags usage;
+    SDL_GPUTransferBuffer* transfer_buffer;
 };
 
 template<typename T>
 void upload_gpu_data(T* data, u32 size, GPUBuffer* buffer_info) {
-    SDL_GPUTransferBufferCreateInfo transfer_buffer_info = {
-        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-        .size = size
-    };
+    if(!buffer_info->transfer_buffer) {
+        SDL_GPUTransferBufferCreateInfo transfer_buffer_info = {
+            .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+            .size = size
+        };
 
-    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(device, &transfer_buffer_info);
-    void* transfer_destination = SDL_MapGPUTransferBuffer(device, transfer_buffer, false);
+        buffer_info->transfer_buffer = SDL_CreateGPUTransferBuffer(device, &transfer_buffer_info);
+    }
+
+    void* transfer_destination = SDL_MapGPUTransferBuffer(device, buffer_info->transfer_buffer, false);
     memcpy_s(transfer_destination, size, data, size);
-    SDL_UnmapGPUTransferBuffer(device, transfer_buffer);
+    SDL_UnmapGPUTransferBuffer(device, buffer_info->transfer_buffer);
 
     SDL_GPUTransferBufferLocation transfer_buffer_location = {
-        .transfer_buffer = transfer_buffer
+        .transfer_buffer = buffer_info->transfer_buffer
     };
 
-    if(buffer_info->buffer == nullptr) {
+    if(!buffer_info->buffer) {
         SDL_GPUBufferCreateInfo buffer_create_info = {
             .usage = buffer_info->usage,
             .size = size
@@ -88,7 +93,7 @@ void upload_gpu_data(T* data, u32 size, GPUBuffer* buffer_info) {
     SDL_UploadToGPUBuffer(copy_pass, &transfer_buffer_location, &buffer_region, false);
     SDL_EndGPUCopyPass(copy_pass);
     SDL_SubmitGPUCommandBuffer(command_buffer);
-    SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
+    //SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
 }
 
 Vertex* calculate_texture_vertices(TextureAtlas texture_atlas) {
@@ -183,7 +188,7 @@ int main() {
           .pitch = sizeof(Vertex),
           .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX },
         { .slot = 1,
-          .pitch = sizeof(Vector2),
+          .pitch = sizeof(InstanceData),
           .input_rate = SDL_GPU_VERTEXINPUTRATE_INSTANCE,
           .instance_step_rate = 1 }
     };
@@ -240,7 +245,7 @@ int main() {
     assert(texture_sampler);
 
     SDL_GPUTextureSamplerBinding texture_sampler_binding = {
-        .texture = texture_atlas.textures[2].handle,
+        .texture = texture_atlas.textures[0].handle,
         .sampler = texture_sampler
     };
 
@@ -348,6 +353,11 @@ int main() {
             SDL_SetWindowTitle(window, fps);
         }
     }
+
+    SDL_ReleaseGPUTransferBuffer(device, vertex_buffer.transfer_buffer);
+    SDL_ReleaseGPUTransferBuffer(device, instance_buffer.transfer_buffer);
+    SDL_ReleaseGPUTransferBuffer(device, index_buffer.transfer_buffer);
+    SDL_ReleaseGPUTransferBuffer(device, draw_buffer.transfer_buffer);
 
     session.debug_print();
 

@@ -27,11 +27,14 @@ echo Building !executable_name!...
 
 set "build_options="
 if "%~1"=="-r" (
+    echo Release configuration
 	set "build_options=!release_options!"
 ) else (
+    echo Debug configuration
 	set "build_options=!debug_options!"
 )
 
+echo [!compiler_options! !build_options!]
 cl !compiler_options! !build_options! !includes! src\main.cpp /Fe!executable_name! /link C:\Dev\_libraries\sdl3\lib\x64\SDL3.lib
 
 if !ERRORLEVEL! neq 0 (
